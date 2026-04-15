@@ -9,72 +9,164 @@ using System.Drawing.Imaging;
 using System.Windows;
 using System.Windows.Forms;
 
-
 namespace BigBrotherClientWPF
 {
-        public partial class MainWindow : Window
+    public partial class MainWindow : Window
+    {
+        TcpClient client;
+        NetworkStream stream;
+
+        public MainWindow()
         {
-            public MainWindow()
+            InitializeComponent();
+
+            //UdpClientDiscovery.Discover();
+
+            Loaded += async (_, __) =>
             {
-                InitializeComponent();
+                await Connect();
 
-            UdpClientDiscovery.Discover();
+                _ = ListenForCommands();
+                _ = PingLoop();
+                _ = ScreenshotLoop();
+            };
+        }
 
-                Loaded += async (_, __) =>
+        async Task Connect()
+        {
+            try
+            {
+                client = new TcpClient();
+                await client.ConnectAsync("10.10.10.114", 6767);
+                stream = client.GetStream();
+
+                Debug.WriteLine("Connected to server");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Connect error: " + ex);
+            }
+        }
+
+        async Task ListenForCommands()
+        {
+            byte[] buffer = new byte[1024];
+
+            while (true)
+            {
+                try
                 {
-                    await SendPing();
+                    int bytes = await stream.ReadAsync(buffer, 0, buffer.Length);
+
+                    if (bytes == 0)
+                        continue;
+
+                    string msg = Encoding.UTF8.GetString(buffer, 0, bytes);
+
+                    HandleCommand(msg);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("Listen error: " + ex);
+                    break;
+                }
+            }
+        }
+
+        void HandleCommand(string msg)
+        {
+            Debug.WriteLine("CMD: " + msg);
+
+            if (msg.Contains("CMD|LOCK"))
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (!IsLockOpen())
+                    {
+                        LockWindow lw = new LockWindow();
+                        lw.Show();
+                    }
+                });
+            }
+
+            if (msg.Contains("CMD|UNLOCK"))
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    foreach (Window w in System.Windows.Application.Current.Windows)
+                    {
+                        if (w is LockWindow)
+                            w.Close();
+                    }
+                });
+            }
+        }
+
+        bool IsLockOpen()
+        {
+            foreach (Window w in System.Windows.Application.Current.Windows)
+                if (w is LockWindow)
+                    return true;
+
+            return false;
+        }
+
+        async Task PingLoop()
+        {
+            while (true)
+            {
+                try
+                {
+                    await Send("PING");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex);
+                }
+
+                await Task.Delay(5000);
+            }
+        }
+
+        async Task ScreenshotLoop()
+        {
+            while (true)
+            {
+                try
+                {
                     await SendScreenshot();
-                };
-            }
-
-            async Task SendPing()
-            {
-                try
-                {
-                    Debug.WriteLine("Pinguje cie");
-
-                    using TcpClient client = new TcpClient();
-                    await client.ConnectAsync("10.10.10.114", 6767);
-
-                    var stream = client.GetStream();
-                    var msg = Encoding.UTF8.GetBytes("PING");
-
-                    await stream.WriteAsync(msg, 0, msg.Length);
                 }
-                catch (Exception e)
+                catch (Exception ex)
                 {
-                    Debug.WriteLine(e.ToString());
+                    Debug.WriteLine(ex);
                 }
+
+                await Task.Delay(5000);
             }
+        }
 
-            async Task SendScreenshot()
-            {
-                try
-                {
-                    Debug.WriteLine("Robię screenshot (WPF)");
+        async Task Send(string msg)
+        {
+            if (stream == null) return;
 
-                    string base64 = CaptureScreenshotBase64();
+            byte[] data = Encoding.UTF8.GetBytes(msg);
+            byte[] length = BitConverter.GetBytes(data.Length);
 
-                    using TcpClient client = new TcpClient();
-                    await client.ConnectAsync("10.10.10.114", 6767);
+            await stream.WriteAsync(length, 0, length.Length);
+            await stream.WriteAsync(data, 0, data.Length);
+        }
 
-                    var stream = client.GetStream();
+        async Task SendScreenshot()
+        {
+            string base64 = CaptureScreenshotBase64();
+            string message = $"SCREENSHOT|{base64}";
 
-                    string message = $"SCREENSHOT|{base64}";
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            byte[] length = BitConverter.GetBytes(data.Length);
 
-                byte[] data = Encoding.UTF8.GetBytes(message);
-                byte[] length = BitConverter.GetBytes(data.Length);
-
-               
-
-                   await stream.WriteAsync(length, 0, 4);
-                    await stream.WriteAsync(data, 0, data.Length);
-            }
-                catch (Exception e)
-                {
-                    Debug.WriteLine(e.ToString());
-                }
-            }
+            await stream.WriteAsync(length, 0, length.Length);
+            await stream.WriteAsync(data, 0, data.Length);
+        }
 
         string CaptureScreenshotBase64()
         {
@@ -90,12 +182,11 @@ namespace BigBrotherClientWPF
 
             return Convert.ToBase64String(ms.ToArray());
         }
+
         private void Lock_Click(object sender, RoutedEventArgs e)
         {
             LockWindow lockWindow = new LockWindow();
-
-            lockWindow.ShowDialog(); // ważne!
+            lockWindow.ShowDialog();
         }
-
     }
 }
