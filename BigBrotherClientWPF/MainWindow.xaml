@@ -7,6 +7,9 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-
+        <Button Content="Zablokuj"
+        Width="200"
+        Height="60"
+        Click="Lock_Click"/>
     </Grid>
 </Window>

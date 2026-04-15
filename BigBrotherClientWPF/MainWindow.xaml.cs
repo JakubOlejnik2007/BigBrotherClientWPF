@@ -90,5 +90,12 @@ namespace BigBrotherClientWPF
 
             return Convert.ToBase64String(ms.ToArray());
         }
+        private void Lock_Click(object sender, RoutedEventArgs e)
+        {
+            LockWindow lockWindow = new LockWindow();
+
+            lockWindow.ShowDialog(); // ważne!
+        }
+
     }
 }
