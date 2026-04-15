@@ -20,13 +20,11 @@ namespace BigBrotherClientWPF
         {
             InitializeComponent();
 
-            //UdpClientDiscovery.Discover();
-
             Loaded += async (_, __) =>
             {
                 await Connect();
 
-                _ = ListenForCommands();
+                _ = ListenLoop();
                 _ = PingLoop();
                 _ = ScreenshotLoop();
             };
@@ -37,8 +35,13 @@ namespace BigBrotherClientWPF
             try
             {
                 client = new TcpClient();
-                await client.ConnectAsync("10.10.10.114", 6767);
+                client.NoDelay = true;
+
+                await client.ConnectAsync("192.168.18.102", 6767);
                 stream = client.GetStream();
+
+                stream.ReadTimeout = 15000;
+                stream.WriteTimeout = 15000;
 
                 Debug.WriteLine("Connected to server");
             }
@@ -48,56 +51,63 @@ namespace BigBrotherClientWPF
             }
         }
 
-        async Task ListenForCommands()
+        async Task ListenLoop()
         {
-            byte[] buffer = new byte[1024];
-
-            while (true)
+            try
             {
-                try
+                while (true)
                 {
-                    int bytes = await stream.ReadAsync(buffer, 0, buffer.Length);
+                    byte[] lengthBytes = new byte[4];
+                    int read = await ReadExact(lengthBytes, 4);
+                    if (read == 0) return;
 
-                    if (bytes == 0)
-                        continue;
+                    int length = BitConverter.ToInt32(lengthBytes, 0);
 
-                    string msg = Encoding.UTF8.GetString(buffer, 0, bytes);
+                    if (length <= 0 || length > 10_000_000)
+                        return;
 
-                    HandleCommand(msg);
+                    byte[] buffer = new byte[length];
+                    await ReadExact(buffer, length);
+
+                    using var ms = new MemoryStream(buffer);
+                    using var br = new BinaryReader(ms, Encoding.UTF8);
+
+                    string type = br.ReadString();
+
+                    switch (type)
+                    {
+                        case "CMD":
+                            HandleCommand(br.ReadString());
+                            break;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Listen error: " + ex);
-                    break;
-                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Listen error: " + ex);
             }
         }
 
-        void HandleCommand(string msg)
+        void HandleCommand(string cmd)
         {
-            Debug.WriteLine("CMD: " + msg);
+            Debug.WriteLine("CMD: " + cmd);
 
-            if (msg.Contains("CMD|LOCK"))
+            if (cmd == "LOCK")
             {
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (!IsLockOpen())
-                    {
-                        LockWindow lw = new LockWindow();
-                        lw.Show();
-                    }
+                        new LockWindow().Show();
                 });
             }
 
-            if (msg.Contains("CMD|UNLOCK"))
+            if (cmd == "UNLOCK")
             {
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
                     foreach (Window w in System.Windows.Application.Current.Windows)
-                    {
                         if (w is LockWindow)
                             w.Close();
-                    }
                 });
             }
         }
@@ -117,7 +127,10 @@ namespace BigBrotherClientWPF
             {
                 try
                 {
-                    await Send("PING");
+                    await SendPacket(bw =>
+                    {
+                        bw.Write("PING");
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -134,7 +147,14 @@ namespace BigBrotherClientWPF
             {
                 try
                 {
-                    await SendScreenshot();
+                    byte[] img = CaptureScreenshot();
+
+                    await SendPacket(bw =>
+                    {
+                        bw.Write("SCREENSHOT");
+                        bw.Write(img.Length);
+                        bw.Write(img);
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -145,30 +165,38 @@ namespace BigBrotherClientWPF
             }
         }
 
-        async Task Send(string msg)
+        async Task SendPacket(Action<BinaryWriter> writeAction)
         {
             if (stream == null) return;
 
-            byte[] data = Encoding.UTF8.GetBytes(msg);
-            byte[] length = BitConverter.GetBytes(data.Length);
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms, Encoding.UTF8);
 
-            await stream.WriteAsync(length, 0, length.Length);
-            await stream.WriteAsync(data, 0, data.Length);
+            writeAction(bw);
+
+            byte[] packet = ms.ToArray();
+            byte[] length = BitConverter.GetBytes(packet.Length);
+
+            await stream.WriteAsync(length);
+            await stream.WriteAsync(packet);
         }
 
-        async Task SendScreenshot()
+        async Task<int> ReadExact(byte[] buffer, int size)
         {
-            string base64 = CaptureScreenshotBase64();
-            string message = $"SCREENSHOT|{base64}";
+            int offset = 0;
 
-            byte[] data = Encoding.UTF8.GetBytes(message);
-            byte[] length = BitConverter.GetBytes(data.Length);
+            while (offset < size)
+            {
+                int read = await stream.ReadAsync(buffer, offset, size - offset);
+                if (read == 0) return 0;
 
-            await stream.WriteAsync(length, 0, length.Length);
-            await stream.WriteAsync(data, 0, data.Length);
+                offset += read;
+            }
+
+            return offset;
         }
 
-        string CaptureScreenshotBase64()
+        byte[] CaptureScreenshot()
         {
             var bounds = Screen.PrimaryScreen.Bounds;
 
@@ -178,9 +206,24 @@ namespace BigBrotherClientWPF
             g.CopyFromScreen(0, 0, 0, 0, bounds.Size);
 
             using MemoryStream ms = new MemoryStream();
-            bmp.Save(ms, ImageFormat.Png);
 
-            return Convert.ToBase64String(ms.ToArray());
+            // 🔥 JPEG zamiast PNG (dużo mniejsze)
+            var encoder = GetJpegEncoder();
+            var quality = new EncoderParameters(1);
+            quality.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 50L);
+
+            bmp.Save(ms, encoder, quality);
+
+            return ms.ToArray();
+        }
+
+        ImageCodecInfo GetJpegEncoder()
+        {
+            foreach (var codec in ImageCodecInfo.GetImageEncoders())
+                if (codec.FormatID == ImageFormat.Jpeg.Guid)
+                    return codec;
+
+            return null;
         }
 
         private void Lock_Click(object sender, RoutedEventArgs e)
