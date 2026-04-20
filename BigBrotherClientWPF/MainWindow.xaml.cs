@@ -16,7 +16,7 @@ namespace BigBrotherClientWPF
         TcpClient client;
         NetworkStream stream;
 
-        NotifyIcon trayIcon; // 👈 DODANE
+        NotifyIcon trayIcon; 
 
         public MainWindow()
         {
@@ -26,7 +26,7 @@ namespace BigBrotherClientWPF
             {
                 this.Hide();
 
-                InitTray(); // 👈 DODANE
+                InitTray(); 
 
                 await Connect();
 
@@ -36,13 +36,13 @@ namespace BigBrotherClientWPF
             };
         }
 
-        // 👇 NOWA METODA
+       
         void InitTray()
         {
             trayIcon = new NotifyIcon();
-            trayIcon.Icon = SystemIcons.Application;
+            trayIcon.Icon = new Icon("eye.ico");
             trayIcon.Visible = true;
-            trayIcon.Text = "BigBrother działa";
+            trayIcon.Text = "Big Brother is watching";
 
             var menu = new ContextMenuStrip();
 
