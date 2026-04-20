@@ -16,20 +16,72 @@ namespace BigBrotherClientWPF
         TcpClient client;
         NetworkStream stream;
 
+        NotifyIcon trayIcon;
+
         public MainWindow()
         {
             InitializeComponent();
 
-            //UdpClientDiscovery.Discover();
-
             Loaded += async (_, __) =>
             {
+                this.Hide();
+
+                InitTray(); 
+
                 await Connect();
 
                 _ = ListenForCommands();
                 _ = PingLoop();
                 _ = ScreenshotLoop();
             };
+        }
+
+        
+        void InitTray()
+        {
+            trayIcon = new NotifyIcon();
+            trayIcon.Icon = new Icon("eye.ico");
+            trayIcon.Visible = true;
+            trayIcon.Text = "Big Brother is watching";
+
+            var menu = new ContextMenuStrip();
+
+            menu.Items.Add("Status", null, (s, e) =>
+            {
+                System.Windows.MessageBox.Show("Aplikacja działa w tle");
+            });
+
+            menu.Items.Add("Pokaż okno", null, (s, e) =>
+            {
+                this.Show();
+                this.WindowState = WindowState.Normal;
+            });
+
+            menu.Items.Add("Ukryj", null, (s, e) =>
+            {
+                this.Hide();
+            });
+
+            menu.Items.Add("Wyjdź", null, (s, e) =>
+            {
+                trayIcon.Visible = false;
+                System.Windows.Application.Current.Shutdown();
+            });
+
+            trayIcon.ContextMenuStrip = menu;
+
+            trayIcon.DoubleClick += (s, e) =>
+            {
+                this.Show();
+                this.WindowState = WindowState.Normal;
+            };
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            trayIcon.Visible = false;
+            trayIcon.Dispose();
+            base.OnClosed(e);
         }
 
         async Task Connect()
