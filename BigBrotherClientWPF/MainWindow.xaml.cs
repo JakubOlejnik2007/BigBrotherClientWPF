@@ -40,7 +40,7 @@ namespace BigBrotherClientWPF
         void InitTray()
         {
             trayIcon = new NotifyIcon();
-            trayIcon.Icon = new Icon("eye.ico");
+            trayIcon.Icon = SystemIcons.Application;
             trayIcon.Visible = true;
             trayIcon.Text = "Big Brother is watching";
 
