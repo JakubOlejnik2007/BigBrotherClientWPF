@@ -48,25 +48,25 @@ namespace BigBrotherClientWPF
 
             menu.Items.Add("Status", null, (s, e) =>
             {
-                System.Windows.MessageBox.Show("Aplikacja działa w tle");
+                System.Windows.MessageBox.Show("Big Brother is indeed, watching you.");
             });
 
-            menu.Items.Add("Pokaż okno", null, (s, e) =>
-            {
-                this.Show();
-                this.WindowState = WindowState.Normal;
-            });
+            //menu.Items.Add("Show Window", null, (s, e) =>
+            //{
+            //    this.Show();
+            //    this.WindowState = WindowState.Normal;
+            //});
 
-            menu.Items.Add("Ukryj", null, (s, e) =>
-            {
-                this.Hide();
-            });
+            //menu.Items.Add("Hide", null, (s, e) =>
+            //{
+            //    this.Hide();
+            //});
 
-            menu.Items.Add("Wyjdź", null, (s, e) =>
-            {
-                trayIcon.Visible = false;
-                System.Windows.Application.Current.Shutdown();
-            });
+            //menu.Items.Add("Quit", null, (s, e) =>
+            //{
+            //    trayIcon.Visible = false;
+            //    System.Windows.Application.Current.Shutdown();
+            //});
 
             trayIcon.ContextMenuStrip = menu;
 
