@@ -66,9 +66,7 @@ Po uruchomieniu aplikacja:
 #### Opcje w trayu:
 
 - **Status** – informacja o działaniu
-- **Pokaż okno** – przywraca UI
-- **Ukryj** – chowa okno
-- **Wyjdź** – zamyka aplikację
+- **Quit** – zamyka aplikację
 
 ---
 
