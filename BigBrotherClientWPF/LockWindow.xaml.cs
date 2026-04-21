@@ -32,7 +32,12 @@ namespace BigBrotherClientWPF
 
         private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
-            //e.Handled = true; // blokuje klawiaturę
+            if (e.Key == Key.System && e.SystemKey == Key.F4)
+            {
+                e.Handled = true;
+                return;
+            }
+            base.OnKeyDown(e);
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

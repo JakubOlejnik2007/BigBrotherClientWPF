@@ -13,7 +13,7 @@
         <StackPanel HorizontalAlignment="Center"
                     VerticalAlignment="Center">
 
-            <TextBlock Text="Big Brother restricted your access."
+            <TextBlock Text="Big Brother has restricted your access."
                        Foreground="#FF6585"
                        FontSize="30"
                        HorizontalAlignment="Center" />
