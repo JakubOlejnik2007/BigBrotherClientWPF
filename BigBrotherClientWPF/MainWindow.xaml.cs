@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace BigBrotherClientWPF
         TcpClient client;
         NetworkStream stream;
 
-        NotifyIcon trayIcon; 
+        NotifyIcon trayIcon;
 
         public MainWindow()
         {
@@ -26,7 +27,7 @@ namespace BigBrotherClientWPF
             {
                 this.Hide();
 
-                InitTray(); 
+                InitTray();
 
                 await Connect();
 
@@ -36,7 +37,6 @@ namespace BigBrotherClientWPF
             };
         }
 
-       
         void InitTray()
         {
             trayIcon = new NotifyIcon();
@@ -50,23 +50,6 @@ namespace BigBrotherClientWPF
             {
                 System.Windows.MessageBox.Show("Big Brother is indeed, watching you.");
             });
-
-            //menu.Items.Add("Show Window", null, (s, e) =>
-            //{
-            //    this.Show();
-            //    this.WindowState = WindowState.Normal;
-            //});
-
-            //menu.Items.Add("Hide", null, (s, e) =>
-            //{
-            //    this.Hide();
-            //});
-
-            //menu.Items.Add("Quit", null, (s, e) =>
-            //{
-            //    trayIcon.Visible = false;
-            //    System.Windows.Application.Current.Shutdown();
-            //});
 
             trayIcon.ContextMenuStrip = menu;
 
@@ -88,15 +71,55 @@ namespace BigBrotherClientWPF
         {
             try
             {
+                var server = DiscoverServer();
+
+                if (server == null)
+                {
+                    Debug.WriteLine("Nie znaleziono serwera");
+                    return;
+                }
+
                 client = new TcpClient();
-                await client.ConnectAsync("10.10.10.114", 6767);
+                await client.ConnectAsync(server.Ip, server.Port);
                 stream = client.GetStream();
 
-                Debug.WriteLine("Connected to server");
+                Debug.WriteLine($"Connected to server {server.Ip}:{server.Port}");
             }
             catch (Exception ex)
             {
                 Debug.WriteLine("Connect error: " + ex);
+            }
+        }
+
+        DiscoveryResult DiscoverServer()
+        {
+            using var udp = new UdpClient();
+            udp.EnableBroadcast = true;
+
+            var broadcast = new IPEndPoint(IPAddress.Parse("10.10.10.255"), 9999);
+
+            byte[] request = Encoding.UTF8.GetBytes("DISCOVER_SERVER");
+            udp.Send(request, request.Length, broadcast);
+
+            udp.Client.ReceiveTimeout = 5000;
+
+            try
+            {
+                var remote = new IPEndPoint(IPAddress.Any, 0);
+                byte[] response = udp.Receive(ref remote);
+
+                string message = Encoding.UTF8.GetString(response);
+                var parts = message.Split(':');
+
+                return new DiscoveryResult
+                {
+                    Ip = parts[0],
+                    Port = int.Parse(parts[1])
+                };
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -240,5 +263,11 @@ namespace BigBrotherClientWPF
             LockWindow lockWindow = new LockWindow();
             lockWindow.ShowDialog();
         }
+    }
+
+    class DiscoveryResult
+    {
+        public string Ip { get; set; }
+        public int Port { get; set; }
     }
 }
